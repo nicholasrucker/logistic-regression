@@ -1,52 +1,46 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-import os
 import math
-import itertools
 import numpy as np
-import math
-
-# Cost function is essentially an adjusted total sum of sqaures statistic
-def costFunction(x_features, y_outcome, betas):
-	SST = 0
-	for j in range(len(x_features)):
-		outcome = -1 * ((x_features[j][0] * betas[0]) + (x_features[j][1] * betas[1]) + (x_features[j][2] * betas[2]))
-		outcome2 = 1 / (1 + math.e**outcome)
-		y_outcome[j] = 1 if y_outcome[j] > 0 else 0
-		SST += y_outcome[j] * math.log(outcome2) + ((1 - y_outcome[j]) * math.log(1 - outcome2))
-
-	return SST / (-len(x_features))
-
-# This is where the magic happens
-# We will need a list of x_features and y_outcomes for trainings
-# Betas is a list of our betas! (eg: the effect of x on y)
-# Iterations is how many times we want to refit the line
-# Lastly, alpha is our learning rate.  This is something that can be changed around!
-# Also, a list of all the costs for each iterations will be returned for easy graphing
-def gradientD(x_features, y_outcome, betas, iterations, alpha):
-	cost = np.zeros(iterations)
-
-	for i in range(iterations):
-		eval0 = 0
-		eval1 = 0
-		eval2 = 0
-		for j in range(len(x_features)):
-
-			eval0 = x_features[j][0] * (1/(1 + (math.e**-((x_features[j][0] * betas[0]) + (x_features[j][1] * betas[1]) + (x_features[j][2] * betas[2]))) - y_outcome[j]))
-			eval1 = x_features[j][1] * (1/(1 + (math.e**-((x_features[j][0] * betas[0]) + (x_features[j][1] * betas[1]) + (x_features[j][2] * betas[2]))) - y_outcome[j]))
-			eval2 = x_features[j][2] * (1/(1 + (math.e**-((x_features[j][0] * betas[0]) + (x_features[j][1] * betas[1]) + (x_features[j][2] * betas[2]))) - y_outcome[j]))
-		
-		betas[0] = betas[0] - (alpha * eval0)
-		betas[1] = betas[1] - (alpha * eval1)
-		betas[2] = betas[2] - (alpha * eval2)
-
-		cost[i] = costFunction(x_features, y_outcome, betas) 
-	return betas, cost
 
 # This is just a handy-dandy function I made a while back to make plotting graphs easier
 def labelGraph(title, x_axis, y_axis):
 	plt.suptitle(title, fontsize=20)
 	plt.xlabel(x_axis, fontsize=16)
+	plt.ylabel(y_axis, fontsize=16)
+
+
+# Lets make a logistic regression class to house all the related functions
+class logisticRegression:
+
+	# Basic constructor to define the learning rate and iterations
+	def __init__(self, learningRate, numIter):
+	  self.learningRate = learningRate
+	  self.numIter = numIter
+
+	# Just a 'clean' way to get the sigmoid result
+	def logisticFunction(self, z):
+		return 1 / (1 + np.exp(-z))
+
+	# Now we are going to use gradient descent to derive the binary classification line
+	def gradientDescent(self, trainData, targetData):
+
+		# Adding a row of '1s' to be the y-intercept of the function
+	  trainData = np.concatenate((np.ones((trainData.shape[0], 1)), trainData), axis=1)
+	  
+	  # This is just a place to store the betas for the regression
+	  self.betas = np.zeros(trainData.shape[1])
+	  
+	  for i in range(self.numIter):
+	  		# We take the dot product to get the value which we exponentiate in the sigmoid function
+	      result = np.dot(trainData, self.betas)
+
+	      # Then we get the hypothesis value by evaluating the logistic function with the result
+	      outcome = self.logisticFunction(result)
+
+	      # Now this is where the algorithm does its 'learning' and adjusts the betas by the effect they have on the result
+	      gradientFactor = np.dot(trainData.T, (outcome - targetData)) / len(targetData)
+	      self.betas -= (self.learningRate * gradientFactor)
 
 # This is our input file used for training the machine
 fileName = 'trainingFile.txt'
@@ -71,60 +65,25 @@ for line in test:
 
 dataFrame = pd.DataFrame(fileData)
 
-# Now we should split the data up so we can evaluate our hypothesis
-# For this example we will use 70% (210 observations) to train and 30% (90 observations) to test
-randomSlice = np.random.rand(len(dataFrame)) < 0.8
-train = dataFrame[randomSlice]
-test = dataFrame[~randomSlice]
+training_data = dataFrame.iloc[:,0:2]
+training_target = dataFrame.iloc[:,2]
 
-# Lets isolate our train and test features
-dataTrain = train.iloc[:,0:2]
-dataTest = test.iloc[:,0:2]
+# Lets save a copy of our dataframe for later on
+plt.scatter(dataFrame[0], dataFrame[1], c = dataFrame[2])
+plt.ylim(0,5)
+plt.xlim(-1,5)
 
-# NumPy has nice built in functionality to create a list of length '1' and the depth of the dataframe 
-# So lets create two of those bad boys and join them to their respective data frame
-testOnes = np.ones([dataTest.shape[0], 1])
-dataTest = np.concatenate((testOnes, dataTest), axis = 1)
+model = logisticRegression(0.01, 15000)
+model.gradientDescent(training_data, training_target)
+print('Beta0 =', f'{model.betas[0]:.7f}','\nBeta1 =', f'{model.betas[1]:.7f}', '\nBeta2 =', f'{model.betas[2]:.7f}')
 
-trainOnes = np.ones([dataTrain.shape[0], 1])
-dataTrain = np.concatenate((trainOnes, dataTrain), axis = 1)
+plot_x = np.array([min(dataFrame.iloc[:,0]) - 3, max(dataFrame.iloc[:,0]) + 2])
+plot_y = (-1/model.betas[2]) * (model.betas[1] * plot_x + model.betas[0])
+print('Points on linear decision boundry:', '(' + str(plot_x[0]) + ',' + str(round(plot_y[0], 4)) + ') and ' + '(' + str(plot_x[1]) + ',' + str(round(plot_y[1],4)) + ')')
 
-targetTrain = train.iloc[:,2].values
-# Isolating target values
-targetTest = test.iloc[:,2].values
-
-# The numbers I chose to start off with were determined after running the algorithm a few times 
-# Basically hyperparameter optimization (its a lot less fancy than it sounds)
-betas = [1, 1, 1]
-
-# A learning rate of .1 seemed to reduce the cost at a significant rate
-alpha = .05
-iterations = 10000
-
-lastBetas, costs = gradientD(dataTrain, targetTrain, betas, iterations, alpha) 
-
-print(lastBetas)
-plot_x = np.array([min(dataTrain[:,0]) - 3, max(dataTrain[:,0]) + 2])
-plot_y = (-1/lastBetas[2]) * (lastBetas[1] * plot_x + lastBetas[0])
-
-plt.scatter(train[0], train[1], c = train[2], cmap = 'viridis')
 plt.plot(plot_x, plot_y)
-labelGraph("Title", "Body Length (cm)", "Dorsal Fin Length (cm)")
+labelGraph('Logistic Classifier', 'X-Points', 'Y-Points')
 plt.show()
 
-while True:
-
-	print("\nEnter a value for body length and dorsal fin length (press enter after each entry): ")
-	firstValue, secondValue = float(input()), float(input())
-	
-	if firstValue == 0 and secondValue == 0:
-		break
-
-	firstValue = (firstValue - savedDF[0].mean()) / savedDF[0].std()
-	secondValue = (secondValue - savedDF[1].mean()) / savedDF[1].std()
-
-	outcome = -1 * (lastBetas[0] + (lastBetas[1] * firstValue) + (lastBetas[2] * secondValue))
-	expectedFish = 1 / (1 + math.e**outcome)
-
-	expectedFish = '1' if (expectedFish) > .5 else '0'
-	print("Expected to be: TigerFish" + expectedFish)
+modelProbability = model.logisticFunction(-np.dot([1,3,4], model.betas))
+print("The probability the point (3,4) is in class '1' is", f'{modelProbability:.4f}')
